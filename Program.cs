@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using MusterýBasvuruService;
-using MusterýBasvuruService;
-
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -10,5 +8,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddHostedService<Worker>();
 
-var host = builder.Build();
-host.Run();
+var app = builder.Build();
+
+await app.RunAsync();
