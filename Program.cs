@@ -4,7 +4,7 @@ using MusterýBasvuruService;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer("Server=.;Database=MusteriBasvuruDb;Trusted_Connection=True;TrustServerCertificate=True;"));
+    options.UseSqlServer(" Server=.;Database=MusteriBasvuru12345;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=False;Encrypt=False;Integrated Security=True"));
 
 builder.Services.AddHostedService<Worker>();
 

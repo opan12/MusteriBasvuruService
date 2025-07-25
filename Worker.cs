@@ -1,11 +1,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using MusterıBasvuruService;
 using MusterıBasvuruService;
 using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+
 namespace MusterıBasvuruService
 {
     public class Worker : BackgroundService
@@ -28,30 +31,56 @@ namespace MusterıBasvuruService
                 using (var scope = _serviceProvider.CreateScope())
                 {
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    Console.WriteLine("bekleyenbasvuru");
 
-                    var bekleyenBasvurular = db._MusteriBasvuru
-                        .Where(x => x.BasvuruDurum == Durum.Beklemede && x.Kayit_Durum == "Aktif")
-                        .ToList();
+                    var bekleyenBasvurular = await db.MusteriBasvuru
+                        .Where(x => x.BasvuruDurum == Durum.Onaylandi && x.Kayit_Durum == "Aktif")
+                        .ToListAsync(stoppingToken);
 
+                    Console.WriteLine("döngü");
                     foreach (var basvuru in bekleyenBasvurular)
                     {
-                        if (basvuru.MusteriNo.StartsWith("A"))
+                        var eskiDurum = basvuru.BasvuruDurum;
+
+                        var user = await db.User.FirstOrDefaultAsync(u => u.MusteriBasvuru_UID == basvuru.Basvuru_UID); // örnek eşleşme
+
+                        if (user != null)
                         {
-                            basvuru.BasvuruDurum = Durum.Onaylandi;
-                            basvuru.HataAciklama = "Şartlar uygun, otomatik onaylandı";
+                            var yas = DateTime.Today.Year - user.DogumTarihi.Year;
+                            if (user.DogumTarihi > DateTime.Today.AddYears(-yas)) yas--;
+
+                            if (yas >= 18)
+                            {
+
+                                basvuru.BasvuruDurum = Durum.Onaylandi;
+                                basvuru.HataAciklama = "Şartlar uygun, otomatik onaylandı";
+                            }
+
+
+                            else if (user.TCKimlikNO.StartsWith("A"))
+                            {
+                                Console.WriteLine("else if");
+
+                                basvuru.BasvuruDurum = Durum.Reddedildi;
+                                basvuru.HataAciklama = "Şartlar sağlanamadı, otomatik reddedildi";
+                            }
+                            else
+                            {
+                                Console.WriteLine("if");
+
+                                basvuru.BasvuruDurum = Durum.Reddedildi;
+                                basvuru.HataAciklama = "Şartlar sağlanamadı, otomatik reddedildi";
+                            }
+                            _logger.LogInformation("Basvuru {uid} durumu: {once} => {sonra}", basvuru.Basvuru_UID, eskiDurum, basvuru.BasvuruDurum);
                         }
-                        else
-                        {
-                            basvuru.BasvuruDurum = Durum.Reddedildi;
-                            basvuru.HataAciklama = "Şartlar sağlanamadı, otomatik reddedildi";
-                        }
+
+                        var changes = await db.SaveChangesAsync(stoppingToken);
+                        _logger.LogInformation("{count} kayıt güncellendi.", changes);
                     }
 
-                    await db.SaveChangesAsync(stoppingToken);
+                    _logger.LogInformation("Kontrol tamamlandı: {time}", DateTimeOffset.Now);
+                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
                 }
-
-                _logger.LogInformation("Kontrol tamamlandı: {time}", DateTimeOffset.Now);
-                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken); // 10 saniyede bir çalışır
             }
         }
     }
